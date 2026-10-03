@@ -1,0 +1,37 @@
+{
+  "name": "client-request-desk",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "npm run dev --prefix server",
+    "client": "npm run dev --prefix client",
+    "seed": "npm run seed --prefix server",
+    "test": "jest --testPathPattern=tests/ --forceExit",
+    "build": "npm run build --prefix client",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
+    "@babel/preset-react": "^7.24.0",
+    "@testing-library/jest-dom": "^6.4.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.5.0",
+    "babel-jest": "^29.7.0",
+    "concurrently": "^8.2.2",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "transform": {
+      "^.+\\.[jt]sx?$": "babel-jest"
+    },
+    "setupFilesAfterFramework": ["@testing-library/jest-dom"],
+    "moduleNameMapper": {
+      "\\.(css|less|scss)$": "<rootDir>/tests/__mocks__/styleMock.js"
+    }
+  }
+}

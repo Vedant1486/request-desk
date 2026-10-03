@@ -1,0 +1,27 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Set up Jest testing infrastructure and install all dependencies. The root package.json already has dev/seed/build scripts and concurrently, but is missing Jest config, Babel config, test dependencies, and the install:all script. The tests/ directory does not yet exist. This FEAT lays the foundation every subsequent step depends on.",
+  "status": "completed",
+  "steps": [
+    "1. Edit root package.json: add 'install:all' script ('npm install && cd client && npm install && cd ../server && npm install'). Update 'test' script to 'jest --testPathPattern=tests/ --forceExit'. Add devDependencies: jest@^29, babel-jest@^29, @babel/core@^7, @babel/preset-env@^7, @babel/preset-react@^7, @testing-library/react@^16, @testing-library/jest-dom@^6, @testing-library/user-event@^14, supertest@^7, identity-obj-proxy@^3. Add 'jest' config block: { testEnvironment: 'node', transform: { '^.+\\\\.[jt]sx?$': 'babel-jest' }, setupFilesAfterFramework: ['@testing-library/jest-dom'], moduleNameMapper: { '\\\\.(css|less|scss)$': '<rootDir>/tests/__mocks__/styleMock.js' } }. NOTE: setupFilesAfterFramework should be 'setupFilesAfterFramework' as jest uses 'setupFilesAfterFramework' — check the exact Jest key name: it is 'setupFilesAfterFramework'.",
+    "2. IMPORTANT CORRECTION on step 1: The correct Jest key is 'setupFilesAfterFramework' — double-check: Jest documentation uses 'setupFilesAfterFramework'. The correct Jest configuration key is 'setupFilesAfterFramework'. Use exactly: 'setupFilesAfterFramework': ['@testing-library/jest-dom'].",
+    "3. Create babel.config.js at repo root with: module.exports = { presets: [['@babel/preset-env', { targets: { node: 'current' } }], ['@babel/preset-react', { runtime: 'automatic' }]] };",
+    "4. Create tests/__mocks__/styleMock.js: module.exports = {};",
+    "5. Run 'npm install' at repo root to install the new devDependencies.",
+    "6. Verify Jest can be found: run 'npx jest --version' from repo root."
+  ],
+  "acceptance_criteria": [
+    "Root package.json has a 'jest' config block with testEnvironment, transform, setupFilesAfterFramework, and moduleNameMapper fields",
+    "Root package.json has 'install:all' script",
+    "babel.config.js exists at repo root and exports presets for @babel/preset-env and @babel/preset-react",
+    "tests/__mocks__/styleMock.js exists and exports an empty object",
+    "Running 'npx jest --version' from repo root succeeds (jest is installed)"
+  ],
+  "verification": [
+    "npx jest --version   (from repo root — confirms jest is installed)",
+    "node -e \"const p=require('./package.json'); console.log(Object.keys(p.jest))\"   (should print jest config keys including testEnvironment, transform, moduleNameMapper)"
+  ],
+  "blocked_reason": null,
+  "findings": "Jest 29.7.0 installed successfully. All devDependencies installed at root. babel.config.js and tests/__mocks__/styleMock.js created. Jest config keys verified: testEnvironment, transform, setupFilesAfterFramework, moduleNameMapper. 'npx jest --version' outputs 29.7.0 with exit code 0."
+}

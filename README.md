@@ -1,186 +1,190 @@
 # Client Request Desk
 
-A full-stack web application for managing customer requests across multiple business workspaces. Team members can review incoming requests, update their status, and convert qualified requests into actionable work items.
+A full-stack web application for managing customer service requests across multiple isolated business workspaces. Team members can create, review, and update requests — and convert qualified requests into work items through a confirmed, transaction-safe flow.
 
-This project was built as a Junior Full Stack Developer take-home assignment.
+Built as a Junior Full Stack Developer take-home assignment.
 
----
+**Demo credentials:**
 
-## Overview
-
-Each workspace is fully isolated — users can only see and modify data belonging to their own workspace. Authentication is handled via JWT, and workspace isolation is enforced server-side on every database query.
+| Workspace   | Email                 | Password     |
+|-------------|-----------------------|--------------|
+| Workspace A | usera@example.com     | Password123! |
+| Workspace B | userb@example.com     | Password123! |
 
 ---
 
 ## Features
 
-- JWT-based authentication with bcrypt password hashing
+- JWT authentication with bcrypt password hashing
 - Multi-workspace isolation enforced entirely on the backend
-- Create, view, and update customer requests
-- Filter requests by status (NEW, QUALIFIED, CLOSED)
-- Convert a QUALIFIED request into a work item (one-to-one, duplicate-safe)
-- Activity log per request (created, updated, converted)
-- Responsive UI using Bootstrap 5
+- Create, view, edit, and filter customer requests by status
+- Human-confirmed work item conversion with a modal
+- Duplicate conversion prevention (application check + DB UNIQUE constraint + transaction)
+- Activity timeline per request (who did what and when)
+- Responsive UI — table on desktop, cards on mobile
+- Full test suite: workspace isolation, conversion rules, frontend modal
 
 ---
 
 ## Tech Stack
 
-| Layer     | Technology                              |
-|-----------|-----------------------------------------|
-| Frontend  | React 18, Vite 5, React Router, Axios   |
-| Backend   | Node.js, Express.js, REST APIs          |
-| Auth      | JWT (`jsonwebtoken`), `bcryptjs`        |
-| Database  | MySQL 8 (`mysql2`)                      |
-| Testing   | Jest, Supertest, React Testing Library  |
-
----
-
-## Project Structure
-
-```
-client-request-desk/
-├── client/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Navbar.jsx
-│   │   │   ├── RequestForm.jsx
-│   │   │   ├── RequestList.jsx
-│   │   │   └── ConfirmationModal.jsx
-│   │   ├── pages/
-│   │   │   ├── Login.jsx
-│   │   │   ├── Dashboard.jsx
-│   │   │   └── RequestDetails.jsx
-│   │   ├── App.jsx
-│   │   ├── api.js
-│   │   ├── main.jsx
-│   │   └── index.css
-│   ├── package.json
-│   └── vite.config.js
-├── server/
-│   ├── controllers/
-│   │   ├── authController.js
-│   │   └── requestController.js
-│   ├── middleware/
-│   │   └── authMiddleware.js
-│   ├── routes/
-│   │   ├── authRoutes.js
-│   │   └── requestRoutes.js
-│   ├── db.js
-│   ├── server.js
-│   ├── seed.js
-│   └── schema.sql
-├── tests/
-│   ├── workspace.test.js
-│   ├── conversion.test.js
-│   └── frontend.test.jsx
-├── .env.example
-├── package.json
-└── README.md
-```
+| Layer     | Technology                                      |
+|-----------|-------------------------------------------------|
+| Frontend  | React 18, Vite 5, React Router v6, Axios        |
+| Styling   | Bootstrap 5, custom CSS design system           |
+| Backend   | Node.js, Express.js, REST API                   |
+| Auth      | JWT (`jsonwebtoken`), `bcryptjs`                |
+| Database  | MySQL 8 (`mysql2` with connection pool)         |
+| Testing   | Jest 29, Supertest, React Testing Library       |
 
 ---
 
 ## Architecture
 
-The backend is a plain Express.js server with a controller/route structure. There are no service layers, repositories, or ORMs — SQL queries live directly in the controllers, keeping the code easy to follow for a junior developer.
+```
+Browser (React SPA)
+       │
+       │  HTTP + Bearer JWT
+       ▼
+Express REST API  ──►  authMiddleware (verifies JWT, sets req.user)
+       │
+       ▼
+Controllers (requestController.js, authController.js)
+       │
+       │  Parameterised SQL — always filtered by workspace_id
+       ▼
+MySQL 8 (connection pool via mysql2)
+```
 
-The frontend is a Vite+React SPA. State is managed with `useState` only. All API calls go through a pre-configured Axios instance (`api.js`) that attaches the JWT token automatically.
+The backend follows a thin controller/route pattern with no ORM, no service layer, and no repository abstractions. SQL queries live directly in controllers — this is intentional (see Trade-offs below).
+
+The frontend is a single-page React app. State is managed with `useState` only. All API calls go through a shared Axios instance (`api.js`) that attaches the JWT token on every request and redirects to `/login` on a 401.
 
 ---
 
-## Authentication
+## Key Decisions
 
-`POST /api/auth/login` accepts `{ email, password }` and returns a JWT containing `userId` and `workspaceId`. The token is stored in `localStorage` and sent as a `Bearer` token on every subsequent request.
-
-The `authMiddleware.js` verifies the token and attaches `req.user = { userId, workspaceId }` to every protected route.
-
----
-
-## Workspace Isolation
-
-This is a critical security requirement. Every database query that touches a request enforces:
+### 1. Workspace isolation lives in the backend only
+The `workspaceId` claim is read exclusively from the verified JWT (`req.user.workspaceId`). The frontend never sends a workspace identifier. Every query that touches a request enforces:
 
 ```sql
 WHERE id = ? AND workspace_id = ?
 ```
 
-where `workspace_id` always comes from `req.user.workspaceId` (the verified JWT claim), never from the request body or URL parameters. If a user tries to access a request from another workspace, the query returns no rows and the API responds with `404 Not Found`, revealing nothing about the other workspace's data.
+If a user manually changes a request ID in the URL to one belonging to another workspace, the query returns no rows and the API returns `404 Not Found` — revealing nothing about the other workspace.
+
+### 2. Conversion uses a MySQL transaction + UNIQUE constraint
+Three layers prevent a request from being converted twice:
+1. **Application check** — query `work_items` for an existing row before inserting.
+2. **MySQL UNIQUE constraint** on `work_items.request_id` — the database rejects a second insert at the storage level.
+3. **Race condition handler** — if two concurrent requests both pass the application check, the second INSERT raises `ER_DUP_ENTRY`. The catch block detects this error code and returns `409 Conflict`.
+
+All three steps run inside a single transaction with `ROLLBACK` on any failure.
+
+### 3. No ORM
+Plain SQL with `mysql2` keeps every query visible and explicit. For a reviewer or junior developer reading the code, it is immediately clear what each database call does. An ORM adds a learning curve and hides the SQL, which works against the goal of simple, explainable code.
+
+### 4. `require.main === module` guard in `server.js`
+`app.listen()` is only called when `server.js` is run directly. When Jest imports the app, no port is bound — this prevents `EADDRINUSE` errors when multiple test files require the server in parallel.
+
+### 5. Tests mock the database
+`db.js` is mocked with `jest.mock` in all backend tests. No live database is required to run `npm test`. This makes CI straightforward and removes the setup burden for reviewers.
 
 ---
 
-## Duplicate Conversion Prevention
+## Assumptions and Trade-offs
 
-Three layers protect against converting the same request twice:
+**MySQL instead of PostgreSQL or SQLite**
+The assignment explicitly requests MySQL. MySQL is a production-grade RDBMS common in Node.js stacks. PostgreSQL has stricter SQL standards compliance and richer JSON operators; SQLite would simplify local setup. MySQL was the correct choice here per the stated requirements.
 
-1. **Application check** — the controller queries for an existing work item before inserting.
-2. **Database constraint** — `work_items.request_id` has a `UNIQUE` index (defined in `schema.sql`), so the database itself rejects a second insert.
-3. **Race condition handling** — if two concurrent requests slip through the application check simultaneously, the second INSERT raises `ER_DUP_ENTRY`. The catch block detects this code and returns `409 Conflict`.
+**`bcryptjs` instead of `bcrypt`**
+`bcryptjs` is pure JavaScript and installs without native build tools (no Python, no C compiler). It provides identical security to `bcrypt`. For a take-home project that reviewers run on any machine, this reduces setup friction.
 
-All three steps run inside a single MySQL transaction with rollback on failure.
+**No sign-up flow**
+This is an internal business tool, not a public-facing product. In real-world systems like this (CRMs, help desks), accounts are provisioned by an administrator. A self-service sign-up is out of scope for this assignment and would require a user-management layer not called for in the spec.
+
+**Flat file structure**
+The project uses the minimum number of files that satisfies all requirements. There are no `services/`, `repositories/`, `utils/`, or `dto/` directories. This is intentional — it makes the code easy to navigate, explain in a follow-up discussion, and extend (see "Adding a field" below).
+
+---
+
+## Adding a Field (Follow-up Readiness)
+
+If asked to add a `priority` field to requests during the discussion:
+
+1. **Schema** — add `priority ENUM('LOW','MEDIUM','HIGH') DEFAULT 'MEDIUM'` to the `requests` table
+2. **Seed** — add `priority` values to the INSERT statements in `seed.js`
+3. **Controller** — add `priority` to the `createRequest` validation and `updateRequest` merge object
+4. **Frontend form** — add a `<select>` field for `priority` in `RequestForm.jsx`
+5. **Display** — add a `priority` column/badge in `RequestList.jsx` and a detail row in `RequestDetails.jsx`
+
+No other files need to change. This is the benefit of a flat, explicit architecture.
 
 ---
 
 ## Database Setup
 
-**Step 1 — Create the database**
+**Prerequisites:** MySQL 8 running locally.
 
 ```bash
+# 1. Create the database
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS client_request_desk CHARACTER SET utf8mb4;"
-```
 
-**Step 2 — Run the schema**
-
-```bash
+# 2. Run the schema (creates all 5 tables with foreign keys and indexes)
 mysql -u root -p client_request_desk < server/schema.sql
-```
 
-**Step 3 — Seed demo data**
-
-```bash
+# 3. Seed demo data (2 workspaces, 2 users, 7 requests, activities)
 npm run seed
 ```
-
-The seed script creates two workspaces, one user per workspace (with bcrypt-hashed passwords), several sample requests in each workspace across all three statuses, and sample activity log entries.
 
 ---
 
 ## Installation
 
 ```bash
-# 1. Copy the environment file and fill in your MySQL credentials
+# 1. Clone the repository
+git clone https://github.com/Vedant1486/request-desk.git
+cd request-desk
+
+# 2. Copy environment file and fill in your MySQL credentials
 cp .env.example .env
 
-# 2. Install all dependencies (root + client + server)
+# 3. Install all dependencies (root + client + server)
 npm run install:all
 ```
 
-`.env` variables required:
+Required `.env` variables:
 
 ```
+PORT=5000
 DB_HOST=localhost
+DB_PORT=3306
 DB_USER=root
-DB_PASSWORD=your_password
+DB_PASSWORD=your_mysql_password
 DB_NAME=client_request_desk
 JWT_SECRET=change_this_to_a_long_random_string
 CLIENT_URL=http://localhost:5173
-PORT=5000
 ```
 
 ---
 
-## Running in Development
+## Development
 
 ```bash
 npm run dev
 ```
 
-This uses `concurrently` to start both servers at once:
+Starts both servers concurrently:
+- Backend API → `http://localhost:5000`
+- Frontend (Vite) → `http://localhost:5173`
 
-- Backend API: `http://localhost:5000`
-- Frontend (Vite): `http://localhost:5173`
+Vite proxies `/api` requests to Express in development, so there are no CORS issues locally.
 
-The Vite dev server proxies `/api` requests to the Express backend, so there are no CORS issues in development.
+Individual servers:
+```bash
+npm run server   # backend only
+npm run client   # frontend only
+```
 
 ---
 
@@ -190,11 +194,13 @@ The Vite dev server proxies `/api` requests to the Express backend, so there are
 npm test
 ```
 
-Runs all three test suites from the `tests/` directory using Jest. **No live database is required** — `db.js` (the mysql2 pool) is fully mocked with `jest.mock`, so the tests run entirely in memory.
+Runs all three suites with Jest. No live database required — `db.js` is fully mocked.
 
-- `workspace.test.js` — workspace isolation (404 on cross-workspace access, 400 on invalid status filter)
-- `conversion.test.js` — request conversion (201 success, 409 non-QUALIFIED, 409 duplicate, 404 wrong workspace, 409 ER_DUP_ENTRY race condition)
-- `frontend.test.jsx` — `ConfirmationModal` component (render, click handlers, loading state)
+| Suite | Tests | What it covers |
+|-------|-------|----------------|
+| `workspace.test.js` | 4 | Workspace A reads own request (200), cross-workspace returns 404, invalid status filter returns 400 |
+| `conversion.test.js` | 7 | QUALIFIED converts (201), NEW rejects (409), CLOSED rejects (409), duplicate returns (409), exactly one work item exists, activity created, wrong workspace returns 404 |
+| `frontend.test.jsx` | 5 | Modal renders, shows customer/service/date, API not called on open, API called on confirm, loading state shown |
 
 ---
 
@@ -204,52 +210,57 @@ Runs all three test suites from the `tests/` directory using Jest. **No live dat
 npm run build
 ```
 
-Builds the Vite frontend to `client/dist`. Serve the static files from Express or a CDN in front of the Node server.
+Builds the Vite frontend to `client/dist`. Serve the static files from a CDN or the Express server in production.
 
 ---
 
-## Demo Credentials
+## API Endpoints
 
-| Workspace   | Email              | Password     |
-|-------------|--------------------|--------------|
-| Workspace A | usera@example.com  | Password123! |
-| Workspace B | userb@example.com  | Password123! |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/auth/login` | ✗ | Login, returns JWT |
+| GET | `/api/requests` | ✓ | List workspace requests (optional `?status=`) |
+| POST | `/api/requests` | ✓ | Create request |
+| GET | `/api/requests/:id` | ✓ | Get request + activities + work item |
+| PATCH | `/api/requests/:id` | ✓ | Update request fields |
+| POST | `/api/requests/:id/convert` | ✓ | Convert QUALIFIED request to work item |
+| GET | `/api/requests/:id/activities` | ✓ | List activities for request |
+| GET | `/api/requests/:id/work-item` | ✓ | Get work item for request |
+| GET | `/api/health` | ✗ | Health check |
 
-Each workspace has its own set of requests. Logging in as one user will not show any data from the other workspace.
-
----
-
-## Assumptions and Trade-offs
-
-**MySQL instead of PostgreSQL or SQLite**
-
-The assignment explicitly requests MySQL, which was respected here. MySQL is a production-grade RDBMS used at scale and is very common in Node.js stacks. PostgreSQL has richer JSON operators, stricter SQL standards compliance, and better support for advanced indexing. SQLite would simplify local setup (no server process needed) but is not suitable for multi-user production workloads. MySQL was the right choice for this assignment's stated requirements.
-
-**`bcryptjs` instead of `bcrypt`**
-
-`bcryptjs` is a pure-JavaScript implementation that installs on any platform without native build tools. The `bcrypt` package requires Python and a C compiler. For a take-home project that reviewers need to run on any machine, `bcryptjs` reduces friction while providing identical security properties.
-
-**No ORM**
-
-Plain SQL with `mysql2` keeps queries visible and straightforward. For a junior developer reading the code, it is immediately clear what each database call does. An ORM like Prisma or Sequelize adds a learning curve and hides the SQL, which works against the goal of simple, explainable code.
-
-**`require.main === module` guard in `server.js`**
-
-`app.listen()` is called only when `server.js` is run directly (`node server.js`), not when it is `require`d by Jest. This prevents port conflicts when multiple test files import the app in parallel.
+All protected endpoints return `401` without a valid token and `404` when the record does not exist in the authenticated user's workspace.
 
 ---
 
 ## Future Improvements
 
-- Password reset flow
-- Role-based access (admin vs. team member)
-- Pagination on the request list
-- Email notifications when a request is converted
-- Soft delete for requests and work items
-- Refresh token support
+Given more time, I would prioritise:
+
+1. **Pagination** — the request list will become slow at scale; cursor-based or offset pagination on `GET /api/requests` is straightforward to add
+2. **Rate limiting** — `express-rate-limit` on the login endpoint to prevent brute-force attacks
+3. **Refresh tokens** — short-lived access tokens (15 min) with a secure httpOnly refresh token cookie, instead of long-lived localStorage JWTs
+4. **Role-based permissions** — an `admin` role that can manage users and workspaces; the `users` table already has `workspace_id` as a FK which makes this natural to extend
+5. **Helmet.js** — add security headers (CSP, HSTS, X-Frame-Options) with a single middleware line
+6. **Input sanitisation** — strip HTML from text fields before storage to prevent stored XSS
+7. **Soft deletes** — add `deleted_at` to requests instead of hard deletes to preserve audit history
+8. **Structured logging** — replace `console.error` with a logger like `pino` that emits JSON for log aggregation
 
 ---
 
 ## AI Usage
 
-This project was developed with AI assistance (GitHub Copilot / Kiro). The AI generated initial boilerplate, helped wire up the JWT middleware, and suggested the three-layer duplicate conversion protection pattern. All code was reviewed, adjusted, and verified to match the assignment requirements.
+This project was developed with AI assistance (Kiro IDE). The AI generated boilerplate, wired up the JWT middleware, and suggested the three-layer duplicate conversion protection pattern (application check + UNIQUE constraint + ER_DUP_ENTRY handler).
+
+All generated code was reviewed line by line. The workspace isolation logic and conversion transaction were manually traced through the controller to verify correctness. Tests were run after each major change and failures were diagnosed and fixed. No generated code was accepted without understanding what it does.
+
+---
+
+## Commit History
+
+```
+feat: Jest infrastructure and test scaffolding
+feat: complete React frontend
+test: test suites and README
+fix: deployment config for Vercel and Render
+feat: complete UI redesign - premium responsive design
+```

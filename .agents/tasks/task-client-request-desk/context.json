@@ -1,0 +1,32 @@
+{
+  "project_type": "Full-stack monorepo: Express/Node.js server + React/Vite client + MySQL database",
+  "language": "JavaScript (CommonJS in server, ES modules in client)",
+  "build_system": "Root package.json orchestrates with npm scripts + concurrently. Client: Vite 5. Server: plain Node. No monorepo tooling (workspaces not used — each subdirectory has its own package.json and node_modules).",
+  "test_framework": "Jest (root-level) + Supertest for backend integration tests + React Testing Library for frontend component tests. Babel transpiles JSX. Config lives in root package.json jest block.",
+  "build_command": "cd client && npm run build   (Vite build; validates all frontend imports)",
+  "test_command": "npx jest --testPathPattern=tests/ --forceExit   (run from repo root)",
+  "verification_instructions": "1. For each frontend file added: run 'cd client && npm run build' from the worktree root and confirm exit code 0. 2. For backend files: they are already complete so no build needed, but require('../server/server') in tests will surface runtime errors. 3. After all test files are written: run 'npx jest --testPathPattern=tests/ --forceExit' from root and confirm 0 failures. 4. Full dev smoke-test (optional, requires MySQL): npm run seed then npm run dev.",
+  "snapshot_or_generated_files": null,
+  "environment_constraints": "Tests must NOT require a live MySQL database — db.js must be mocked with jest.mock('../server/db'). The mock pool needs both query (jest.fn()) and getConnection (jest.fn() returning a mock connection with beginTransaction/query/commit/rollback/release). JWT_SECRET must be set in process.env before importing server in tests (set it at the top of each test file before any require). Client build runs in client/ subdirectory (cd client && npm run build). Do not restart any dev server. Windows filesystem; paths use backslashes in shell but forward slashes in code.",
+  "contribution_requirements": "Keep code simple enough for a junior developer to explain. Use as few files as possible. No TypeScript, no Prisma, no Redux, no Next.js. Every core feature must work. No TODOs for required features. Tests must mock the DB and pass without a live database.",
+  "key_patterns": "Server: CommonJS (require/module.exports). Controllers use async/await with try/catch and return early on errors. Workspace isolation enforced on every DB query via 'WHERE id = ? AND workspace_id = ?' using req.user.workspaceId (never trusting client-supplied workspaceId). Client: ES modules (import/export). State managed with useState only — no context or Redux. api.js is a pre-configured axios instance at baseURL '/api' with JWT interceptor; all API calls use this instance. Bootstrap 5 classes used directly in JSX (no styled-components). Status badges use CSS classes badge-NEW/badge-QUALIFIED/badge-CLOSED defined in index.css.",
+  "relevant_files": [
+    "server/server.js",
+    "server/db.js",
+    "server/middleware/authMiddleware.js",
+    "server/controllers/requestController.js",
+    "server/controllers/authController.js",
+    "server/routes/requestRoutes.js",
+    "server/routes/authRoutes.js",
+    "server/schema.sql",
+    "server/seed.js",
+    "client/src/api.js",
+    "client/src/main.jsx",
+    "client/src/index.css",
+    "client/vite.config.js",
+    "client/package.json",
+    "server/package.json",
+    "package.json"
+  ],
+  "directory_structure": "Root: package.json (jest config + scripts), babel.config.js, .env.example, README.md. client/src/: App.jsx (router), api.js (axios), main.jsx (entry), index.css, pages/ (Login, Dashboard, RequestDetails), components/ (Navbar, RequestList, RequestForm, ConfirmationModal). server/: server.js (Express app), db.js (mysql2 pool), controllers/, middleware/, routes/, schema.sql, seed.js. tests/: workspace.test.js, conversion.test.js, frontend.test.jsx, __mocks__/styleMock.js."
+}

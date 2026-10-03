@@ -1,9 +1,12 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 export default function Navbar() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const initials = user.name
+    ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : '?';
 
   function handleLogout() {
     localStorage.clear();
@@ -11,21 +14,40 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="navbar navbar-expand-lg navbar-dark bg-dark px-3">
-      <a className="navbar-brand" href="/">Client Request Desk</a>
-      <div className="ms-auto d-flex align-items-center gap-2">
-        {user.name && <span className="text-white me-2">{user.name}</span>}
+    <nav className="app-navbar">
+      {/* Brand */}
+      <Link to="/" className="navbar-brand-wrap">
+        <div className="navbar-logo">📋</div>
+        <span className="navbar-title">
+          Client <span>Request Desk</span>
+        </span>
+      </Link>
+
+      {/* Right side */}
+      <div className="navbar-right">
+        {/* User pill — hidden on small screens via CSS */}
+        {user.name && (
+          <div className="navbar-user-pill">
+            <div className="navbar-avatar">{initials}</div>
+            <span className="navbar-user-name">{user.name}</span>
+            {user.workspaceName && (
+              <span className="navbar-workspace">{user.workspaceName}</span>
+            )}
+          </div>
+        )}
+
+        {/* New Request */}
         <button
-          className="btn btn-outline-light btn-sm"
+          className="btn-primary-custom"
+          style={{ fontSize: '0.78rem', padding: '0.38rem 0.85rem' }}
           onClick={() => navigate('/requests/new')}
         >
-          New Request
+          + New
         </button>
-        <button
-          className="btn btn-outline-danger btn-sm ms-2"
-          onClick={handleLogout}
-        >
-          Logout
+
+        {/* Logout */}
+        <button className="btn-logout" onClick={handleLogout}>
+          Sign Out
         </button>
       </div>
     </nav>

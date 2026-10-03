@@ -1,0 +1,7 @@
+{
+  "task_id": "task-client-request-desk",
+  "task_description": "Build CLIENT REQUEST DESK: a full-stack React/Express/MySQL app that manages customer requests across multiple isolated business workspaces. Team members can filter, create, view, edit, and convert QUALIFIED requests into work items via a transactional backend API protected by JWT workspace isolation.",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003"],
+  "blocked_reason": null
+}

@@ -39,6 +39,75 @@ Built as a Junior Full Stack Developer take-home assignment.
 
 ---
 
+## Project Structure
+
+```
+client-request-desk/
+│
+├── client/                          # React frontend (Vite)
+│   ├── public/
+│   │   └── vite.svg
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Navbar.jsx           # Top navigation bar with user info + logout
+│   │   │   ├── RequestForm.jsx      # Reusable create/edit form with validation
+│   │   │   ├── RequestList.jsx      # Table (desktop) + cards (mobile)
+│   │   │   └── ConfirmationModal.jsx # "Are you sure?" modal before conversion
+│   │   ├── pages/
+│   │   │   ├── Login.jsx            # Login page with demo credential buttons
+│   │   │   ├── Dashboard.jsx        # Request list + stats + filters
+│   │   │   └── RequestDetails.jsx   # Single request + timeline + work item
+│   │   ├── App.jsx                  # Router + ProtectedRoute guard
+│   │   ├── api.js                   # Axios instance with JWT interceptor
+│   │   ├── main.jsx                 # React entry point
+│   │   └── index.css                # Custom design system on top of Bootstrap
+│   ├── index.html
+│   ├── vite.config.js               # Vite config with /api proxy to Express
+│   └── package.json
+│
+├── server/                          # Express backend
+│   ├── controllers/
+│   │   ├── authController.js        # POST /api/auth/login
+│   │   └── requestController.js    # All 7 request endpoints
+│   ├── middleware/
+│   │   └── authMiddleware.js        # JWT verification → sets req.user
+│   ├── routes/
+│   │   ├── authRoutes.js
+│   │   └── requestRoutes.js
+│   ├── db.js                        # mysql2 connection pool
+│   ├── server.js                    # Express app entry point
+│   ├── schema.sql                   # All 5 tables with FK + indexes
+│   ├── seed.js                      # Demo data (2 workspaces, 2 users, 7 requests)
+│   └── package.json
+│
+├── tests/                           # Jest test suites
+│   ├── workspace.test.js            # Workspace isolation tests (Supertest)
+│   ├── conversion.test.js           # Conversion business rule tests (Supertest)
+│   ├── frontend.test.jsx            # ConfirmationModal tests (RTL)
+│   └── __mocks__/
+│       └── styleMock.js             # CSS mock for Jest
+│
+├── .env.example                     # Environment variable template
+├── .gitignore
+├── babel.config.js                  # Babel config for Jest JSX support
+├── package.json                     # Root scripts + Jest config
+└── README.md
+```
+
+### Key File Responsibilities
+
+| File | Responsibility |
+|------|---------------|
+| `authMiddleware.js` | Verifies JWT, extracts `userId` + `workspaceId`, rejects invalid tokens |
+| `requestController.js` | All request business logic — isolation, validation, conversion transaction |
+| `db.js` | Single mysql2 pool shared across all queries |
+| `api.js` | Axios base URL, auto-attach token, redirect on 401 |
+| `App.jsx` | Route definitions + `ProtectedRoute` (redirects to `/login` if no token) |
+| `schema.sql` | Source of truth for DB structure — `UNIQUE(request_id)` is defined here |
+| `seed.js` | Reproducible demo data with bcrypt-hashed passwords |
+
+---
+
 ## Architecture
 
 ```
